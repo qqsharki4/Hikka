@@ -485,17 +485,6 @@ class HikkaSettingsMod(loader.Module):
             reply_markup=self._get_settings_markup(),
         )
 
-        self._db.set(main.__name__,
-            key,
-            state,
-            True
-        )
-
-        await call.edit(
-            self.strings("inline_settings"),
-            self._get_settings_markup(),
-        )
-
     async def inline__update(
         self,
         call: InlineCall,
@@ -505,7 +494,7 @@ class HikkaSettingsMod(loader.Module):
             await call.edit(
                 self.strings("confirm_update"),
                 reply_markup=[
-                    {"text": "🪂 Update", "callback": "selfinline__update"},
+                    {"text": "🪂 Update", "callback": self.inline__update},
                     {"text": "🚫 Cancel", "action": "close"},
                 ],
             )
@@ -543,14 +532,14 @@ class HikkaSettingsMod(loader.Module):
     async def inline__restart(
         self,
         call: InlineCall,
-        confirm_required: bool = True,
+        confirm_required: bool = False,
     ):
         if confirm_required:
             await call.edit(
                 self.strings("confirm_restart"),
                 reply_markup=[
-                    {"text": "🔄 Restart", "callback": "inline__restart"},
-                    "text": "🚫 Cancel", "action": "close"},
+                    {"text": "🔄 Restart", "callback": self.inline__restart},
+                    {"text": "🚫 Cancel", "action": "close"},
                 ],
             )
             return
@@ -559,7 +548,7 @@ class HikkaSettingsMod(loader.Module):
         await call.delete()
         await self.invoke("restart", "-f", peer="me")
 
-    def _get_settings(self) -> list:
+    def _get_settings_markup(self) -> list:
         return [
             [
                 (
@@ -569,18 +558,17 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "no_nickname",
                             False,
-                            )                        },
-                    )
+                        ),
+                    }
                     if self._db.get(main.__name__, "no_nickname", False)
-                    else:
-                        {
-                            "text": "🚫 NoNick",
-                            "callback": self.__setting,
-                            "args": (
-                                "no_nickname",
-                                True,
-                            )
-                        }
+                    else {
+                        "text": "🚫 NoNick",
+                        "callback": self.inline__setting,
+                        "args": (
+                            "no_nickname",
+                            True,
+                        ),
+                    }
                 ),
                 (
                     {
@@ -589,18 +577,17 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "grep",
                             False,
-                        )                        },
-                    )
-                    if self._db.get(main.__name__"., "grep", False)
-                    else:
-                        {
-                            "text": "🚫 Grep",
-                            "callback": self.inline__setting,
-                            "args": (
-                                "grep",
-                                True,
-                            ),
-                            }                        )
+                        ),
+                    }
+                    if self._db.get(main.__name__, "grep", False)
+                    else {
+                        "text": "🚫 Grep",
+                        "callback": self.inline__setting,
+                        "args": (
+                            "grep",
+                            True,
+                        ),
+                    }
                 ),
                 (
                     {
@@ -609,19 +596,17 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "inlinelogs",
                             False,
-                        )                        },
-                    )
+                        ),
+                    }
                     if self._db.get(main.__name__, "inlinelogs", True)
-                    else:
-                            {
-                                "text": "🚫 InlineLogs",
-                                "callback": self.inline__setting,
-                                "args": (
-                                    "inlinelogs",
-                                    True,
-                                ),
-                            }                            )
-                    ),
+                    else {
+                        "text": "🚫 InlineLogs",
+                        "callback": self.inline__setting,
+                        "args": (
+                            "inlinelogs",
+                            True,
+                        ),
+                    }
                 ),
             ],
             [
@@ -632,19 +617,18 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "disable_modules_fs",
                             False,
-                            )                        },
-                        )                            if self._db.get(main.__name__, "disable_modules_fs", False)
-                        else:
-                            {
-                                "text": self.strings("suggest_fs"),
-                                "callback": self.inline__setting,
-                                "args": (
-                                    "disable_modules_",
-                                    True,
-                                ),
-                            }                            )
-                        )
-                ),
+                        ),
+                    }
+                    if self._db.get(main.__name__, "disable_modules_fs", False)
+                    else {
+                        "text": self.strings("suggest_fs"),
+                        "callback": self.inline__setting,
+                        "args": (
+                            "disable_modules_fs",
+                            True,
+                        ),
+                    }
+                )
             ],
             [
                 (
@@ -654,19 +638,17 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "permanent_modules_fs",
                             False,
-                            )                        },
-                    )
+                        ),
+                    }
                     if self._db.get(main.__name__, "permanent_modules_fs", False)
-                    else:
-                        {
-                            "text": self.strings("do_not_use_fs"),
-                            "callback": self.inline__setting,
-                            "args": (
-                                "permanent_modules_fs",
-                                True,
-                            ),
-                            }                            )
-                        )
+                    else {
+                        "text": self.strings("do_not_use_fs"),
+                        "callback": self.inline__setting,
+                        "args": (
+                            "permanent_modules_fs",
+                            True,
+                        ),
+                    }
                 ),
             ],
             [
@@ -677,20 +659,17 @@ class HikkaSettingsMod(loader.Module):
                         "args": (
                             "suggest_subscribe",
                             False,
-                            )                        },
-                    )
+                        ),
+                    }
                     if self._db.get(main.__name__, "suggest_subscribe", True)
-                    else:
-                        {
-                            "text": self.strings("do_not_suggest_subscribe"),
-                            "callback": self.inline__setting,
-                            "args": (
-                                "suggest_subscribe",
-                                True,
-                            ),
-                            }                            )
-                        )
-                    ),
+                    else {
+                        "text": self.strings("do_not_suggest_subscribe"),
+                        "callback": self.inline__setting,
+                        "args": (
+                            "suggest_subscribe",
+                            True,
+                        ),
+                    }
                 ),
             ],
             [
@@ -700,41 +679,33 @@ class HikkaSettingsMod(loader.Module):
                         "callback": self.inline__setting,
                         "args": (
                             lambda: main.save_config_key(
-                                "disable_custom_emojis",
-                                False,
+                                "disable_custom_emojis", False
                             ),
-                            ),
-                        }                            )
-                        if main.get_config_key("disable_custom_emojis")
-                        else:
-                            {
-                                "text": self.strings("custom_emojis"),
-                                "callback": self.inline__setting,
-                                "args": (
-                                    lambda: main.save_config_key(
-                                        "disable_custom_emojis",
-                                        True,
-                                    ),
-                                ),
-                            }                            )
-                        )
-                    ),
-                ],
+                        ),
+                    }
+                    if main.get_config_key("disable_custom_emojis")
+                    else {
+                        "text": self.strings("custom_emojis"),
+                        "callback": self.inline__setting,
+                        "args": (
+                            lambda: main.save_config_key("disable_custom_emojis", True),
+                        ),
+                    }
+                ),
+            ],
             [
                 (
                     {
                         "text": self.strings("disable_debugger"),
                         "callback": self.inline__setting,
                         "args": lambda: self._db.set(log.__name__, "debugger", False),
-                        }                        )
+                    }
                     if self._db.get(log.__name__, "debugger", False)
-                    else:
-                        {
-                            "text": self.strings("enable_debugger"),
-                            "callback": self.inline__setting,
-                            "args": (lambda: self._db.set(log.__name__, "debugger", True),),
-                        }
-                    ),
+                    else {
+                        "text": self.strings("enable_debugger"),
+                        "callback": self.inline__setting,
+                        "args": (lambda: self._db.set(log.__name__, "debugger", True),),
+                    }
                 ),
             ],
             [
@@ -768,7 +739,7 @@ class HikkaSettingsMod(loader.Module):
                 message=message,
                 reply_markup={
                     "text": self.strings("web_btn"),
-                    "url": "http://127.0.0.1",  # Локальный хост для VDS
+                    "url": await main.hikka.web.get_url(proxy_pass=False),
                 },
                 gif="https://t.me/hikari_assets/28",
             )
@@ -802,7 +773,22 @@ class HikkaSettingsMod(loader.Module):
                         utils.escape_html(self.get_prefix()),
                     ),
                 )
-                return
+
+            return
+
+        if not main.hikka.web:
+            main.hikka.web = core.Web(
+                data_root=main.BASE_DIR,
+                api_token=main.hikka.api_token,
+                proxy=main.hikka.proxy,
+                connection=main.hikka.conn,
+            )
+            await main.hikka.web.add_loader(self._client, self.allmodules, self._db)
+            await main.hikka.web.start_if_ready(
+                len(self.allclients),
+                main.hikka.arguments.port,
+                proxy_pass=main.hikka.arguments.proxy_pass,
+            )
 
         if force:
             form = message
@@ -823,11 +809,11 @@ class HikkaSettingsMod(loader.Module):
                 ),
             )
 
-        await asyncio.sleep(5)  # Задержка 5 секунд, как в Heroku
+        url = await main.hikka.web.get_url(proxy_pass=True)
 
         await form.edit(
             self.strings("tunnel_opened"),
-            reply_markup={"text": self.strings("web_btn"), "url": "http://127.0.0.1"},  # Локальный хост
+            reply_markup={"text": self.strings("web_btn"), "url": url},
             gif="https://t.me/hikari_assets/48",
         )
 
@@ -866,35 +852,22 @@ class HikkaSettingsMod(loader.Module):
         module = args.split()[0]
         method = args.split(maxsplit=1)[1]
 
-        if (
-            module != "core" and not self.lookup(module):
-            await self.lookup(module)
-            return
-        await utils.answer(message, self.strings("module404").format(module))
+        if module != "core" and not self.lookup(module):
+            await utils.answer(message, self.strings("module404").format(module))
             return
 
         if (
             module == "core"
             and method not in ALL_INVOKES
             or module != "core"
-            and method not in self._get_all_IDM(module):
-            or (
-                await self._get_all_IDM(module)
-                method == not in self._get_all_IDM(module)
-            )
+            and method not in self._get_all_IDM(module)
+        ):
+            await utils.answer(message, self.strings("invoke404").format(method))
             return
-        await utils.answer(message, self.strings("invoke404").format(method))
-        return
 
-        message = await self.utils.answer(
-            self._("invoking").format(
-                method,
-                module
-            )
-            message,
-            self.strings("invoking").format(method, module)
-            )
-
+        message = await utils.answer(
+            message, self.strings("invoking").format(method, module)
+        )
         result = ""
 
         if module == "core":
@@ -919,80 +892,54 @@ class HikkaSettingsMod(loader.Module):
                 self._client._hikka_perms_cache = {}
             elif method == "flush_loader_cache":
                 result = (
-                    f"Dropped {await(self._lookup("loader").flush_cache())} cache records"
+                    f"Dropped {await self.lookup('loader').flush_cache()} cache records"
                 )
             elif method == "flush_cache":
-                count = await(self._lookup("loader").flush_cache())
-                self._client._result = (
+                count = self.lookup("loader").flush_cache()
+                result = (
                     f"Dropped {len(self._client._hikka_entity_cache)} entity cache"
-                    " records"
-                    f"\nrecords\n"
-                    f"Dropped {len(self._client._hikka_fulluser_cache)} fulluser cache"
-                    " records"
-                    f"\nrecords\n"
-                    f"Dropped {len(self._client._hikka_fullchannel_cache)} fullchannel cache"
-                    f" records\nrecords\n"
-                    f"Dropped {count} loader cache records"
+                    " records\nDropped"
+                    f" {len(self._client._hikka_fulluser_cache)} fulluser cache"
+                    " records\nDropped"
+                    f" {len(self._client._hikka_fullchannel_cache)} fullchannel cache"
+                    " records\nDropped"
+                    f" {count} loader links cache records"
                 )
                 self._client._hikka_entity_cache = {}
-                self._client._client._hikka_fulluser_cache = {}
+                self._client._hikka_fulluser_cache = {}
                 self._client._hikka_fullchannel_cache = {}
-                self._client._hikka_me = await(self._client._client.get_me())
+                self._client.hikka_me = await self._client.get_me()
             elif method == "reload_core":
                 core_quantity = await self.lookup("loader").reload_core()
                 result = f"Reloaded {core_quantity} core modules"
-                self._reload_core_quantity = core_quantity
             elif method == "inspect_cache":
                 result = (
-                    f"_inspect_cache(self._client._result = (
                     "Entity cache:"
-                    f" {len(self._client._hikka_entity_cache)} records"
-                    f"\nrecords\n"
-                    "Fulluser cache:"
-                    f"len(self._client._hikka_fulluser_cache)}"
-                    f"\nrecords\n"
-                    f"Fullchannel cache:"
-                    f"{self.lookup(self._client._hikka_fullchannel_cache)} records"
-                    f"\nrecords\n"
-                    f"Loader links cache: {self._lookup("loader").inspect_cache()} records"
+                    f" {len(self._client._hikka_entity_cache)} records\nFulluser cache:"
+                    f" {len(self._client._hikka_fulluser_cache)} records\nFullchannel"
+                    " cache:"
+                    f" {len(self._client._hikka_fullchannel_cache)} records\nLoader"
+                    f" links cache: {self.lookup('loader').inspect_cache()} records"
                 )
             elif method == "inspect_modules":
                 result = (
-                    "Loaded modules: {}"
-                    f"\nLoaded core modules: {len(self._allmodules.modules)}"
-                    f"\nCore modules: {sum(
-                        module.__origin__.startswith("<core")
-                        for module in self._allmodules.modules
-                    )}"
-                    f"\nUser modules: {sum(
-                        not module.__origin__.startswith("<core")
-                        for module in self._allmodules.modules
-                    )}"
+                    "Loaded modules: {}\nLoaded core modules: {}\nLoaded user"
+                    " modules: {}"
                 ).format(
-                    len(self._allmodules.modules),
+                    len(self.allmodules.modules),
                     sum(
                         module.__origin__.startswith("<core")
-                        for module in self._allmodules.modules
+                        for module in self.allmodules.modules
                     ),
                     sum(
                         not module.__origin__.startswith("<core")
-                        for module in self._allmodules.modules
+                        for module in self.allmodules.modules
                     ),
                 )
-            else:
-                result = await self._get_all_IDM(module)(
-                    self._get_all_IDM(module)[method](
-                    message
-                )
+        else:
+            result = await self._get_all_IDM(module)[method](message)
 
-        await self.utils_answer(
-            self._(
-                message,
-                self._strings("invoke").format(
-                    method,
-                    utils.escape_html(
-                        result
-                    )
-                ),
-            )
+        await utils.answer(
+            message,
+            self.strings("invoke").format(method, utils.escape_html(result)),
         )

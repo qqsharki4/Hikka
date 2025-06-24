@@ -8,9 +8,13 @@ import asyncio
 import contextlib
 import logging
 import os
+import subprocess
+import sys
 import time
 import typing
 
+import git
+from git import GitCommandError, Repo
 from hikkatl.extensions.html import CUSTOM_EMOJIS
 from hikkatl.tl.functions.messages import (
     GetDialogFiltersRequest,
@@ -18,20 +22,28 @@ from hikkatl.tl.functions.messages import (
 )
 from hikkatl.tl.types import DialogFilter, Message
 
-from .. import loader, main, utils
+from .. import loader, main, utils, version
 from .._internal import restart
 from ..inline.types import InlineCall
 
 logger = logging.getLogger(__name__)
 
+
 @loader.tds
 class UpdaterMod(loader.Module):
-    """Управляет перезапусками бота"""
+    """Updates itself"""
 
     strings = {"name": "Updater"}
 
     def __init__(self):
-        pass
+        self.config = loader.ModuleConfig(
+            loader.ConfigValue(
+                "GIT_ORIGIN_URL",
+                "https://github.com/hikariatama/Hikka",
+                lambda: self.strings("origin_cfg_doc"),
+                validator=loader.validators.Link(),
+            )
+        )
 
     @loader.command()
     async def restart(self, message: Message):
@@ -120,18 +132,151 @@ class UpdaterMod(loader.Module):
         handler.setLevel(logging.CRITICAL)
 
         for client in self.allclients:
+            # Terminate main loop of all running clients
+            # Won't work if not all clients are ready
             if client is not message.client:
                 await client.disconnect()
 
         await message.client.disconnect()
         restart()
 
+    async def download_common(self):
+        try:
+            repo = Repo(os.path.dirname(utils.get_base_dir()))
+            origin = repo.remote("origin")
+            r = origin.pull()
+            new_commit = repo.head.commit
+            for info in r:
+                if info.old_commit:
+                    for d in new_commit.diff(info.old_commit):
+                        if d.b_path == "requirements.txt":
+                            return True
+            return False
+        except git.exc.InvalidGitRepositoryError:
+            repo = Repo.init(os.path.dirname(utils.get_base_dir()))
+            origin = repo.create_remote("origin", self.config["GIT_ORIGIN_URL"])
+            origin.fetch()
+            repo.create_head("master", origin.refs.master)
+            repo.heads.master.set_tracking_branch(origin.refs.master)
+            repo.heads.master.checkout(True)
+            return False
+
+    @staticmethod
+    def req_common():
+        # Now we have downloaded new code, install requirements
+        logger.debug("Installing new requirements...")
+        try:
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pip",
+                    "install",
+                    "-r",
+                    os.path.join(
+                        os.path.dirname(utils.get_base_dir()),
+                        "requirements.txt",
+                    ),
+                    "--user",
+                ],
+                check=True,
+            )
+        except subprocess.CalledProcessError:
+            logger.exception("Req install failed")
+
+    @loader.command()
+    async def update(self, message: Message):
+        try:
+            args = utils.get_args_raw(message)
+            current = utils.get_git_hash()
+            upcoming = next(
+                git.Repo().iter_commits(f"origin/{version.branch}", max_count=1)
+            ).hexsha
+            if (
+                "-f" in args
+                or not self.inline.init_complete
+                or not await self.inline.form(
+                    message=message,
+                    text=(
+                        self.strings("update_confirm").format(
+                            current, current[:8], upcoming, upcoming[:8]
+                        )
+                        if upcoming != current
+                        else self.strings("no_update")
+                    ),
+                    reply_markup=[
+                        {
+                            "text": self.strings("btn_update"),
+                            "callback": self.inline_update,
+                        },
+                        {"text": self.strings("cancel"), "action": "close"},
+                    ],
+                )
+            ):
+                raise
+        except Exception:
+            await self.inline_update(message)
+
+    async def inline_update(
+        self,
+        msg_obj: typing.Union[InlineCall, Message],
+        hard: bool = False,
+    ):
+        # We don't really care about asyncio at this point, as we are shutting down
+        if hard:
+            os.system(f"cd {utils.get_base_dir()} && cd .. && git reset --hard HEAD")
+
+        try:
+            if "LAVHOST" in os.environ:
+                msg_obj = await utils.answer(
+                    msg_obj,
+                    self.strings("lavhost_update").format(
+                        "</b><emoji document_id=5192756799647785066>✌️</emoji><emoji"
+                        " document_id=5193117564015747203>✌️</emoji><emoji"
+                        " document_id=5195050806105087456>✌️</emoji><emoji"
+                        " document_id=5195457642587233944>✌️</emoji><b>"
+                        if self._client.hikka_me.premium
+                        and CUSTOM_EMOJIS
+                        and isinstance(msg_obj, Message)
+                        else "lavHost"
+                    ),
+                )
+                await self.process_restart_message(msg_obj)
+                os.system("lavhost update")
+                return
+
+            with contextlib.suppress(Exception):
+                msg_obj = await utils.answer(msg_obj, self.strings("downloading"))
+
+            req_update = await self.download_common()
+
+            with contextlib.suppress(Exception):
+                msg_obj = await utils.answer(msg_obj, self.strings("installing"))
+
+            if req_update:
+                self.req_common()
+
+            await self.restart_common(msg_obj)
+        except GitCommandError:
+            if not hard:
+                await self.inline_update(msg_obj, True)
+                return
+
+            logger.critical("Got update loop. Update manually via .terminal")
+
+    @loader.command()
+    async def source(self, message: Message):
+        await utils.answer(
+            message,
+            self.strings("source").format(self.config["GIT_ORIGIN_URL"]),
+        )
+
     async def client_ready(self):
         if self.get("selfupdatemsg") is not None:
             try:
                 await self.update_complete()
             except Exception:
-                logger.exception("Не удалось завершить обновление!")
+                logger.exception("Failed to complete update!")
 
         if self.get("do_not_create", False):
             return
@@ -139,7 +284,7 @@ class UpdaterMod(loader.Module):
         try:
             await self._add_folder()
         except Exception:
-            logger.exception("Не удалось создать папку!")
+            logger.exception("Failed to add folder!")
 
         self.set("do_not_create", True)
 
@@ -207,7 +352,7 @@ class UpdaterMod(loader.Module):
                                 1554874075,
                                 1697279580,
                                 1679998924,
-                            ]
+                            ]  # official hikka chats
                         ],
                         emoticon="🐱",
                         exclude_peers=[],
@@ -224,14 +369,14 @@ class UpdaterMod(loader.Module):
             )
         except Exception:
             logger.critical(
-                "Не удалось создать папку Hikka. Возможные причины:\n"
-                "- Достигнут лимит папок в Telegram\n"
-                "- Получен флудвейт\n"
-                "Игнорирую ошибку и добавляю создание папки в список игнорирования"
+                "Can't create Hikka folder. Possible reasons are:\n"
+                "- User reached the limit of folders in Telegram\n"
+                "- User got floodwait\n"
+                "Ignoring error and adding folder addition to ignore list"
             )
 
     async def update_complete(self):
-        logger.debug("Успешное завершение обновления! Редактирую сообщение")
+        logger.debug("Self update successful! Edit message")
         start = self.get("restart_ts")
         try:
             took = round(time.time() - start)
