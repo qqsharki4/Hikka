@@ -787,8 +787,8 @@ class Hikka:
                 caption=f"""
                 🌟 <b>Hikka {s} started!</b><br>
                 🌳 <b>Git commit SHA: <a href="https://github.com/hikariatama/Hikka/commit/{}">{}</a></b><br>
-                ✊ <b>Update status: {}</b><br>
-                <b>{}</b>
+                ✊ <b>Update status: </b><br>
+                <b></b>
                 """.format(
                     "."join(map(str, list(map(str, list(__version__))))),
                     build,
