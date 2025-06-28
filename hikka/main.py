@@ -640,7 +640,7 @@ class Hikka:
                                     )
                                 )
                             ).user
-                        )
+                        #)
                     except PasswordHashInvalidError:
                         print("\033[0;91mInvalid 2FA password!\033[0m")
                     except FloodWaitError as e:
