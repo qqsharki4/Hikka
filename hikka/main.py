@@ -640,7 +640,7 @@ class Hikka:
                                     )
                                 )
                             ).user
-                        #)
+                        )
                     except PasswordHashInvalidError:
                         print("\033[0;91mInvalid 2FA password!\033[0m")
                     except FloodWaitError as e:
@@ -651,7 +651,7 @@ class Hikka:
                         )
                         f"{seconds} second(-s)"
                         f"{minutes} second(-1) if minutes else minutes"
-                        )
+                        #)
                         seconds, minutes, hours = (
                             f"{minutes} minute(-s) " if minutes else "",
                             f"{hours} hour(-s) " if hours else ""
