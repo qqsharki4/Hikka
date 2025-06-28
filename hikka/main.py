@@ -138,7 +138,7 @@ def generate_app_name() -> str:
 
 def get_app_name() -> str:
     """
-    Generates random app name or gets the saved one of present
+    Generates random app name or gets the saved one if present
     :return: App name
     :example: "Cresco Cibus Consilium"
     """
@@ -176,7 +176,7 @@ def get_config_key(key: str) -> typing.Union[str, bool]:
         return False
 
 
-def save_config_key(key: str, value: str) -> bool:
+def save_config_key(key: str, value: typing.Any) -> bool:
     """
     Save `key` with `value` to config
     :param key: Key name in config
@@ -257,7 +257,7 @@ def parse_arguments() -> dict:
         "--no-auth",
         dest="no_auth",
         action="store_true",
-        help="Disable authentication and API token input, exitting if needed",
+        help="Disable authentication and API token input, exiting if needed",
     )
     parser.add_argument(
         "--proxy-host",
@@ -328,7 +328,7 @@ class SuperList(list):
 
 
 class InteractiveAuthRequired(Exception):
-    """Is being rased by Telethon, if phone is required"""
+    """Is being raised by Telethon, if phone is required"""
 
 
 def raise_auth():
@@ -469,7 +469,9 @@ class Hikka:
 
     async def _get_token(self):
         """Reads or waits for user to enter API credentials"""
-        if self.api_token is None and not self.arguments.no_auth:
+        while self.api_token is None:
+            if self.arguments.no_auth:
+                return
             if self.web:
                 await self.web.start(self.arguments.port, proxy_pass=True)
                 await self._web_banner()
@@ -649,25 +651,21 @@ class Hikka:
                             e.seconds % 3600 // 60,
                             e.seconds // 3600,
                         )
-                        f"{seconds} second(-s)"
-                        f"{minutes} second(-1) if minutes else minutes"
-                        #)
                         seconds, minutes, hours = (
+                            f"{seconds} second(-s)",
                             f"{minutes} minute(-s) " if minutes else "",
-                            f"{hours} hour(-s) " if hours else ""
+                            f"{hours} hour(-s) " if hours else "",
                         )
                         print(
-                            "\033[0;91m",
-                            f"You got FloodWait error! Please wait {hours}{minutes}{seconds}s",
-                            "\033[0m"
+                            "\033[0;91mYou got FloodWait error! Please wait"
+                            f" {hours}{minutes}{seconds}\033[0m"
                         )
                         return False
                     else:
                         break
 
             print_banner("success.txt")
-            print("\033[0;92m")
-            logging.info("Successfully logged in!")
+            print("\033[0;92mLogged in successfully!\033[0m")
             await self.save_client_session(client)
             self.clients += [client]
             return True
@@ -679,14 +677,14 @@ class Hikka:
             )
             await self._web_banner()
 
-        await self.web.wait_for_clients()
+        await self.web.wait_for_clients_setup()
 
         return True
 
     async def _init_clients(self) -> bool:
         """
         Reads session from disk and inits them
-        :returns: True if successfully started, otherwise False
+        :returns: `True` if at least one client started successfully
         """
         for session in self.sessions.copy():
             try:
@@ -698,68 +696,82 @@ class Hikka:
                     proxy=self.proxy,
                     connection_retries=None,
                     device_model=get_app_name(),
-                    system_version="Windows",
-                    app_version=".".join(map(str, list(__version__))),
+                    system_version="Windows 10",
+                    app_version=".".join(map(str, __version__)) + " x64",
                     lang_code="en",
                     system_lang_code="en-US",
                 )
 
                 await client.start(
-                    phone=lambda: input(
-                        "\033[0;96mEnter phone number: \033[0m"
-                        if IS_TERMUX or self.arguments.tty
-                        else "Enter phone number:"
+                    phone=(
+                        raise_auth
+                        if self.web
+                        else lambda: input(
+                            "\033[0;96mEnter phone: \033[0m"
+                            if IS_TERMUX or self.arguments.tty
+                            else "Enter phone: "
+                        )
                     )
                 )
-                client.phone = ""
+                client.phone = "never gonna give you up"
 
                 self.clients += [client]
-            except:
+            except sqlite3.OperationalError:
+                logging.error(
+                    (
+                        "Check that this is the only instance running. "
+                        "If that doesn't help, delete the file '%s'"
+                    ),
+                    session.filename,
+                )
                 continue
-            except Exception as e:
-                logging.error(f"Error starting session {session.filename}: {str(e)}")
-                continue
-            except ValueError or TypeError:
-                Path(session.filename).delete(missing_ok=True)
-                self.session.remove(session)
-            except ApiIdInvalidError:
+            except (TypeError, AuthKeyDuplicatedError):
+                Path(session.filename).unlink(missing_ok=True)
+                self.sessions.remove(session)
+            except (ValueError, ApiIdInvalidError):
+                # Bad API hash/ID
                 run_config()
                 return False
             except PhoneNumberInvalidError:
-                logging.error("Invalid phone number format. Use international format (+XX...)")
-                self.session.remove(session)
+                logging.error(
+                    "Phone number is incorrect. Use international format (+XX...) "
+                    "and don't put spaces in it."
+                )
+                self.sessions.remove(session)
             except InteractiveAuthRequired:
-                logging.error("Session %s was closed, re-auth required", session)
-                self.session.remove(session)
+                logging.error(
+                    "Session %s was terminated and re-auth is required",
+                    session.filename,
+                )
+                self.sessions.remove(session)
 
         return bool(self.sessions)
 
-
-    async def wrapper_amain(self, client: CustomTelegramClient):
-        """Wrapper for amain"""
+    async def amain_wrapper(self, client: CustomTelegramClient):
+        """Wrapper around amain"""
         async with client:
             first = True
             me = await client.get_me()
             client._tg_id = me.id
             client.tg_id = me.id
             client.hikka_me = me
-            while await self._main_loop(first, client):
+            while await self.amain(first, client):
                 first = False
 
     async def _badge(self, client: CustomTelegramClient):
-        """Show badge in shell"""
+        """Call the badge in shell"""
         try:
             import git
 
             repo = git.Repo()
 
-            build = utils.get_commit()
+            build = utils.get_git_hash()
             diff = repo.git.log([f"HEAD..origin/{version.branch}", "--oneline"])
             upd = "Update required" if diff else "Up-to-date"
 
             logo = (
-                "█ █ █ ████ ██████ ████\n"
-                "█ █ █ █  █  █  ██  █  \n"
+                "█ █ █ █▄▀ █▄▀ ▄▀█\n"
+                "█▀█ █ █ █ █ █ █▀█\n\n"
                 f"• Build: {build[:7]}\n"
                 f"• Version: {'.'.join(list(map(str, list(__version__))))}\n"
                 f"• {upd}\n"
@@ -773,8 +785,8 @@ class Hikka:
                     else ""
                 )
                 logging.debug(
-                    "\n🌌 Hikka %s #%s (%s) started\n%s",
-                    ".".join(map(str, list(__version__))),
+                    "\n🌘 Hikka %s #%s (%s) started\n%s",
+                    ".".join(list(map(str, list(__version__)))),
                     build[:7],
                     upd,
                     web_url,
@@ -784,38 +796,37 @@ class Hikka:
             await client.hikka_inline.bot.send_animation(
                 logging.getLogger().handlers[0].get_logid_by_client(client.tg_id),
                 "https://github.com/hikariatama/assets/raw/master/hikka_banner.mp4",
-                caption=f"""
-                🌟 <b>Hikka {s} started!</b><br>
-                🌳 <b>Git commit SHA: <a href="https://github.com/hikariatama/Hikka/commit/{}">{}</a></b><br>
-                ✊ <b>Update status: </b><br>
-                <b></b>
-                """.format(
-                    "."join(map(str, list(map(str, list(__version__))))),
-                    build,
-                    build[:7],
-                    upd,
-                    web_url,
-                )
+                caption=(
+                    "🌘 <b>Hikka {} started!</b>\n\n🌳 <b>GitHub commit SHA: <a"
+                    ' href="https://github.com/hikariatama/Hikka/commit/{}">{}</a></b>\n✊'
+                    " <b>Update status: {}</b>\n<b>{}</b>".format(
+                        ".".join(list(map(str, list(__version__)))),
+                        build,
+                        build[:7],
+                        upd,
+                        web_url,
+                    )
+                ),
             )
 
             logging.debug(
-                f"Started for user {client.tg_id} with prefix {client.hikka_db.get(__name__, 'prefix', '.')}",
+                "· Started for %s · Prefix: «%s» ·",
+                client.tg_id,
+                client.hikka_db.get(__name__, "command_prefix", False) or ".",
             )
-
         except Exception:
-            logging.exception("Error in badge display")
+            logging.exception("Badge error")
 
-
-    async def _add_dispatchers(
+    async def _add_dispatcher(
         self,
         client: CustomTelegramClient,
-        modules: loader.Module,
-        db: CustomDatabase,
+        modules: loader.Modules,
+        db: database.Database,
     ):
-        """Initialize and add dispatcher"""
-        dispatcher = CommandDispatchers(modules, client, db)
+        """Inits and adds dispatcher instance to client"""
+        dispatcher = CommandDispatcher(modules, client, db)
         client.dispatcher = dispatcher
-        modules.security_checker = dispatcher.check_security
+        modules.check_security = dispatcher.check_security
 
         client.add_event_handler(
             dispatcher.handle_incoming,
@@ -824,43 +835,43 @@ class Hikka:
 
         client.add_event_handler(
             dispatcher.handle_incoming,
-            events.ChatActions,
+            events.ChatAction,
         )
 
         client.add_event_handler(
-            dispatcher.handle_commands,
+            dispatcher.handle_command,
             events.NewMessage(forwards=False),
         )
 
         client.add_event_handler(
-            dispatcher.handle_commands,
-            events.MessageEdited(messages),
+            dispatcher.handle_command,
+            events.MessageEdited(),
         )
 
         client.add_event_handler(
-            dispatcher.handle_raws,
-            events.RawEvents(),
+            dispatcher.handle_raw,
+            events.Raw(),
         )
 
-    async def amain(self, first: bool, client: CustomClient):
-        """Main async entry point"""
+    async def amain(self, first: bool, client: CustomTelegramClient):
+        """Entrypoint for async init, run once for each user"""
         client.parse_mode = "HTML"
         await client.start()
 
-        db = CustomDatabase(client)
+        db = database.Database(client)
         client.hikka_db = db
         await db.init()
 
-        logging.debug("Database initialized")
-        logging.debug("Loading logging configuration...")
+        logging.debug("Got DB")
+        logging.debug("Loading logging config...")
 
         translator = Translator(client, db)
-        await translator.init()
 
-        modules = Loader(client, db, translator)
+        await translator.init()
+        modules = loader.Modules(client, db, self.clients, translator)
         client.loader = modules
 
-        client.pyro = None
+        client.pyro_proxy = None  # Will be set later if needed
 
         if self.web:
             await self.web.add_loader(client, modules, db)
@@ -873,7 +884,7 @@ class Hikka:
         await self._add_dispatcher(client, modules, db)
 
         await modules.register_all(None)
-        await modules.send_config()
+        modules.send_config()
         await modules.send_ready()
 
         if first:
@@ -882,13 +893,13 @@ class Hikka:
         await client.run_until_disconnected()
 
     async def _main(self):
-        """Main entry point"""
+        """Main entrypoint"""
         self._init_web()
         save_config_key("port", self.arguments.port)
         await self._get_token()
 
         if (
-            not self.clients and not self._sessions or not await self._init_clients()
+            not self.clients and not self.sessions or not await self._init_clients()
         ) and not await self._initial_setup():
             return
 
